@@ -76,7 +76,7 @@ void setup() {
 
   // Setup display
   tft.initR(INITR_BLACKTAB);
-  tft.setRotation(0);
+  tft.setRotation(1);
   tft.fillScreen(ST77XX_BLUE);
   tft.setTextColor(ST77XX_YELLOW);
   tft.setTextSize(1);
