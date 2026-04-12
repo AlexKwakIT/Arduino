@@ -14,7 +14,7 @@
 const char* ssid = "eTrackServer";
 const char* password = "eTrack12321";
 
-const char* serverURL = "http://192.168.1.100:8000/detect/abc/klm/"; // your server
+const char* serverURL = "http://192.168.1.100:8000/detect/";
 
 U8G2_SSD1306_72X40_ER_F_HW_I2C display(U8G2_R0, U8X8_PIN_NONE);
 
@@ -22,10 +22,15 @@ U8G2_SSD1306_72X40_ER_F_HW_I2C display(U8G2_R0, U8X8_PIN_NONE);
 PN532_I2C pn532i2c(Wire);
 PN532 nfc(pn532i2c);
 
+char ESP32_ID[20];
+
 void setup() {
+  uint64_t chipid = ESP.getEfuseMac();
+  sprintf(ESP32_ID, "%04X%08X", (uint16_t)(chipid >> 32), (uint32_t)chipid);
 
   Serial.begin(115200);
-  Serial.println("Starting debugging");
+  Serial.print("ESP32 C3: ");
+  Serial.println(ESP32_ID);
 
   Wire.begin(SDA_PIN, SCL_PIN);
 
@@ -56,36 +61,20 @@ void setup() {
   }
 
   display.clearBuffer();
+  display.drawStr(0, 10, "ESP32 C3");
+  display.drawStr(0, 20, ESP32_ID);
   if (WiFi.status() != WL_CONNECTED) {
-    display.drawStr(0, 10, "Connection");
-    display.drawStr(0, 20, "FAILED");
+    display.drawStr(0, 30, "Connection");
+    display.drawStr(0, 40, "FAILED");
     while (true);
   } else {
-    display.drawStr(0, 10, "Connected:");
-    display.drawStr(0, 20, ssid);
-    display.sendBuffer();
+    display.drawStr(0, 30, "Connected:");
+    display.drawStr(0, 40, ssid);
   }
+  display.sendBuffer();
 
   nfc.begin();
   nfc.SAMConfig();
-
-  Serial.println("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX");
-
-  sendUID("foo");
-
-  // Find I2C devices
-  for (byte addr = 0; addr <= 127; addr++) {
-      Wire.beginTransmission(addr);
-      if (Wire.endTransmission() == 0) {
-        Wire.beginTransmission(addr);
-        Wire.write(0x00);             // register to read
-        Wire.endTransmission(false);  // repeated start
-        String msg = " I2C at 0x";
-        msg += String(addr, HEX);
-        Serial.println(msg);
-      }
-  }
-
 }
 
 void loop() {
@@ -94,24 +83,23 @@ void loop() {
   uint8_t uidLength;
 
   if (nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A, uid, &uidLength)) {
-    Serial.println("A");
-    Serial.println(uidLength);
-
     String uidString = "";
 
     for (int i = 0; i < uidLength; i++) {
       if(uid[i] < 0x10) uidString += "0";
       uidString += String(uid[i], HEX);
     }
-
     uidString.toUpperCase();
 
-  //   display.clearDisplay();
-  //   display.setTextSize(1);
-  //   display.setCursor(0,0);
-  //   display.println("Card UID:");
-  //   display.println(uidString);
-  //   display.display();
+    char UID[20];
+    uidString.toCharArray(UID, sizeof(UID));
+
+    display.clearBuffer();
+    display.drawStr(0, 10, "ESP32 C3");
+    display.drawStr(0, 20, ESP32_ID);
+    display.drawStr(0, 30, "Tag id");
+    display.drawStr(0, 40, UID);
+    display.sendBuffer();
 
     sendUID(uidString);
 
@@ -120,11 +108,14 @@ void loop() {
 }
 
 void sendUID(String uid) {
-  Serial.print("UID: ");
-  Serial.println(uid);
+  Serial.print("Sending UID ");
+  Serial.print(uid);
+  Serial.print(" from ");
+  Serial.println(ESP32_ID);
+
   if (WiFi.status() == WL_CONNECTED) {
     HTTPClient http;
-    String url = String(serverURL) + uid + "/";
+    String url = String(serverURL) + ESP32_ID + "/" + uid + "/";
     http.begin(url);
     int httpResponseCode = http.GET();
     if (httpResponseCode > 0) {
@@ -132,7 +123,7 @@ void sendUID(String uid) {
       Serial.println(httpResponseCode);
 
       String payload = http.getString();
-      Serial.println("Response:");
+      Serial.print("Response: ");
       Serial.println(payload);
     } else {
       Serial.print("Error: ");
