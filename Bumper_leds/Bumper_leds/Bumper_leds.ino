@@ -58,19 +58,13 @@ void loop() {
     if (cycleTime <= ch.fadeToMaxTime) {
       int val = int(255 * (float(cycleTime) / float(ch.fadeToMaxTime)));
       analogWrite(ch.pin, val);
-      Serial.print("A ");
-      Serial.println(val);
     } else if (cycleTime <= ch.fadeToMaxTime + ch.holdTimeMax) {
       analogWrite(ch.pin, 255);
-      Serial.println("B");
     } else if (cycleTime <= ch.fadeToMaxTime + ch.holdTimeMax + ch.fadeToMinTime) {
       int val = 255 - int(255 * (float(cycleTime - ch.fadeToMaxTime - ch.holdTimeMax) / float(ch.fadeToMinTime)));
       analogWrite(ch.pin, val);
-      Serial.print("C ");
-      Serial.println(val);
     } else{
       analogWrite(ch.pin, 0);
-      Serial.println("D");
     }
   }
   recvData();
