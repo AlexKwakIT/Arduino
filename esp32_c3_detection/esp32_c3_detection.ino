@@ -13,7 +13,12 @@
 
 const char* ssid = "eTrackServer";
 const char* password = "eTrack12321";
-const char* serverURL = "http://192.168.10.35:8000/detect/";
+const char* possibleServerPorts[] = {
+  "http://192.168.10.65:8000",
+  "http://192.168.10.35:8000"
+};
+const int serverCount = sizeof(possibleServerPorts) / sizeof(possibleServerPorts[0]);
+String serverUrl = "";
 
 U8G2_SSD1306_72X40_ER_F_HW_I2C display(U8G2_R0, U8X8_PIN_NONE);
 
@@ -22,6 +27,29 @@ PN532_I2C pn532i2c(Wire);
 PN532 nfc(pn532i2c);
 
 char ESP32_ID[20];
+
+bool isServerAlive(String url) {
+  HTTPClient http;
+  String testUrl = url + "/ping/";
+  Serial.println("testUrl: " + testUrl);
+  http.begin(testUrl);
+  int code = http.GET();
+  http.end();
+  return (code > 0 && code < 400);
+}
+
+void findWorkingServer() {
+  for (int i = 0; i < serverCount; i++) {
+    String url = String(possibleServerPorts[i]);
+
+    if (isServerAlive(url)) {
+      serverUrl = url;
+      Serial.println("Selected server: " + serverUrl);
+      return;
+    }
+  }
+  Serial.println("No server found!");
+}
 
 void setup() {
   uint64_t chipid = ESP.getEfuseMac();
@@ -72,6 +100,8 @@ void setup() {
     display.drawStr(0, 40, ssid);
   }
   display.sendBuffer();
+
+  findWorkingServer();
 
   nfc.begin();
   nfc.SAMConfig();
@@ -128,7 +158,7 @@ void sendUID(String uid) {
 
   if (WiFi.status() == WL_CONNECTED) {
     HTTPClient http;
-    String url = String(serverURL) + ESP32_ID + "/" + uid + "/";
+    String url = String(serverUrl) + "/detect/" + ESP32_ID + "/" + uid + "/";
     http.begin(url);
     int httpResponseCode = http.GET();
     if (httpResponseCode > 0) {
