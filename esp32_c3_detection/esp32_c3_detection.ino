@@ -38,17 +38,19 @@ bool isServerAlive(String url) {
   return (code > 0 && code < 400);
 }
 
-void findWorkingServer() {
+void findWorkingServer(int i) {
+  Serial.print("Finding server, try ");
+  Serial.print(i);
+  Serial.println(" of 5");
   for (int i = 0; i < serverCount; i++) {
     String url = String(possibleServerPorts[i]);
 
     if (isServerAlive(url)) {
       serverUrl = url;
-      Serial.println("Selected server: " + serverUrl);
+      Serial.println("Found server: " + serverUrl);
       return;
     }
   }
-  Serial.println("No server found!");
 }
 
 void setup() {
@@ -59,6 +61,7 @@ void setup() {
   Serial.println("");
   Serial.print("ESP32 C3: ");
   Serial.println(ESP32_ID);
+  Serial.println("Starting up...");
 
   Wire.begin(SDA_PIN, SCL_PIN);
 
@@ -101,10 +104,22 @@ void setup() {
   }
   display.sendBuffer();
 
-  findWorkingServer();
+  for (int i=1; i<=5; i++) {
+    findWorkingServer(i);
+    if (serverUrl != "") break;
+    delay(2000);
+  }
+  if (serverUrl == "") {
+    Serial.println("Stopping");
+    display.clearBuffer();
+    display.drawStr(0, 10, "NO SERVER");
+    display.sendBuffer();
+    while (true) {}
+  }
 
   nfc.begin();
   nfc.SAMConfig();
+  Serial.println("Ready!");
 }
 
 void loop() {
@@ -143,7 +158,9 @@ void recvData() {
     char controlChar1 = Serial.read();
     switch (controlChar1) {
       case '?':
-        Serial.print("{\"id\":\"eTrack Detector\"}");
+        Serial.print("{\"id\":\"eTrack Detector ");
+        Serial.print(ESP32_ID);
+        Serial.print("\"}");
         break;
     }
   }
@@ -155,6 +172,8 @@ void sendUID(String uid) {
   Serial.print(uid);
   Serial.print(" from ");
   Serial.println(ESP32_ID);
+  Serial.print(" to ");
+  Serial.println(serverUrl);
 
   if (WiFi.status() == WL_CONNECTED) {
     HTTPClient http;

@@ -11,11 +11,10 @@
 
 #define NUM_MESSAGE_LINES 6
 
-#define STRAIGHT LOW
-#define TURNOUT  HIGH
+#define STRAIGHT HIGH
+#define TURNOUT  LOW
 
-#define NUM_TURNOUTS 7
-#define MAIN_SWITCH 8
+#define ACTIVATE_SWITCHES_PIN 11
 
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
@@ -23,53 +22,31 @@ String messages[NUM_MESSAGE_LINES] = {"", "", "", "", "", ""};
 
 bool isPrinting = false;
 
-String setSwitch(int switchNr, char direction, bool activate=true) {
-  int pin = get_pin(switchNr);
-  digitalWrite(pin, direction == '0' ? STRAIGHT : TURNOUT);
+String setSwitch(int pinNr, char direction, bool activate=true) {
+  pinMode(pinNr, OUTPUT);
+  digitalWrite(pinNr, direction == 'S' ? STRAIGHT : TURNOUT);
   if (activate) {
-    activateSwitches();
+    activateTurnouts();
   }
   String msg = "Turnout ";
-  msg += pin;
-  msg += direction == '0' ? " straight" : " diverge";
-  msg += direction;
+  msg += pinNr;
+  msg += direction == 'S' ? " straight" : " diverge";
   addMessage(msg);
   return msg;
-}
-
-int get_pin(int nr) {
-  return nr + 4;
 }
 
 void setup() {
   Serial.begin(9600);
   pinMode(LED_BUILTIN, OUTPUT);
 
+  pinMode(ACTIVATE_SWITCHES_PIN, OUTPUT);
+  digitalWrite(ACTIVATE_SWITCHES_PIN, HIGH);
+
   // Setup display
   if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) { 
     Serial.println(F("SSD1306 allocation failed"));
   }
   display.display();
-
-  // Setup Turnouts
-  for (int pin=0; pin<=NUM_TURNOUTS; pin++) {
-    pinMode(get_pin(pin), OUTPUT);
-  }
- 
-  digitalWrite(get_pin(MAIN_SWITCH), LOW);
-
-  for (int pin=0; pin<NUM_TURNOUTS; pin++) {
-    pinMode(get_pin(pin), OUTPUT);
-    setSwitch(pin, TURNOUT, false);
-  }
-  delay(500);
-  activateSwitches();
-  delay(500);
-  for (int pin=1; pin<NUM_TURNOUTS; pin++) {
-    setSwitch(pin, STRAIGHT, false);
-  }
-  delay(500);
-  activateSwitches();
 
   // Flush receive buffer
   while (Serial.available() > 0) {
@@ -79,7 +56,8 @@ void setup() {
 
 void loop() {
   // internal LED short blink
-  digitalWrite(LED_BUILTIN, (millis() % 2000 <= 200 ? HIGH : LOW));
+  // digitalWrite(LED_BUILTIN, (millis() % 2000 <= 200 ? HIGH : LOW));
+  digitalWrite(LED_BUILTIN, HIGH);
 
   recvData();
   printStatus();
@@ -93,36 +71,44 @@ void addMessage(String message) {
   printStatus();
 }
 
-void activateSwitches() {
-  digitalWrite(get_pin(MAIN_SWITCH - 1), LOW);
+void activateTurnouts() {
+  digitalWrite(ACTIVATE_SWITCHES_PIN, LOW);
   delay(250);
-  digitalWrite(get_pin(MAIN_SWITCH - 1), HIGH);
+  digitalWrite(ACTIVATE_SWITCHES_PIN, HIGH);
 }
 
 void recvData() {
   if (Serial.available() > 0) {
-      char controlChar1 = Serial.read();
-      switch (controlChar1) {
-        case '?':
-          Serial.print("{\"id\":\"eTrack Turnouts\"}");
-          break;
-        case 's': {
-          // Set switch on/off
-          char controlChar2 = Serial.read();
-          char controlChar3 = Serial.read();
-          char controlChar4 = Serial.read();
-          int switchNr = 10 * (controlChar2 - '0') + (controlChar3 - '0');
-          String msg = setSwitch(switchNr, controlChar4);
-          Serial.print(msg + "\n");
-        }
+    // char controlChar1 = Serial.read();
+    String cmd = Serial.readStringUntil('\n');
+    switch (cmd[0]) {
+      case '?':
+        Serial.println("{\"id\":\"eTrack Turnouts\"}");
         break;
-        case 'a': {
-          // Set all switches
-          activateSwitches();
-          Serial.print("Activated all switches\n");
-        }
-        break;
+      case 's': {
+          if (cmd.length() == 4) {
+            int switchNr = 10 * (cmd[1] - '0') + (cmd[2] - '0');
+            char direction = cmd[3];
+
+            String msg = setSwitch(switchNr, direction);
+            Serial.println(msg);
+          } else {
+            Serial.print("Invalid command ");
+            Serial.println(cmd);
+          }
       }
+      break;
+      case 'a': {
+        // Set all switches
+        //activateTurnouts();
+        Serial.println("Activated all turnouts");
+      }
+      break;
+    }
+    // Flush receive buffer
+    while (Serial.available() > 0) {
+      char ch = Serial.read();
+    }
   }
 }
 
