@@ -100,7 +100,7 @@ void recvData() {
       break;
       case 'a': {
         // Set all switches
-        //activateTurnouts();
+        activateTurnouts();
         Serial.println("Activated all turnouts");
       }
       break;
