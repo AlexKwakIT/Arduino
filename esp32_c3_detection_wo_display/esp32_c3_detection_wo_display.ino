@@ -4,6 +4,7 @@
 #include <PN532_I2C.h>
 #include <PN532.h>
 
+#define RESET_PIN 4
 #define SDA_PIN 5
 #define SCL_PIN 6
 
@@ -32,24 +33,31 @@ bool isServerAlive(String url) {
   return (code > 0 && code < 400);
 }
 
-void findWorkingServer(int i) {
-  Serial.print("Finding server, try ");
-  Serial.print(i);
-  Serial.println(" of 5");
-  for (int i = 0; i < serverCount; i++) {
-    String url = String(possibleServerPorts[i]);
-
-    if (isServerAlive(url)) {
-      serverUrl = url;
-      Serial.println("Found server: " + serverUrl);
-      return;
+void findWorkingServer() {
+  int i = 1;
+  while (true) {
+    Serial.print("Finding server, try ");
+    Serial.println(i);
+    for (int i = 0; i < serverCount; i++) {
+      String url = String(possibleServerPorts[i]);
+      if (isServerAlive(url)) {
+        serverUrl = url;
+        Serial.println("Found server: " + serverUrl);
+        HTTPClient http;
+        String url = String(serverUrl) + "/detection-checkin/" + ESP32_ID + "/";
+        http.begin(url);
+        http.GET();
+        http.end();
+        return;
+      }
     }
   }
 }
-
 void setup() {
   uint64_t chipid = ESP.getEfuseMac();
   sprintf(ESP32_ID, "%04X%08X", (uint16_t)(chipid >> 32), (uint32_t)chipid);
+
+  pinMode(RESET_PIN, INPUT_PULLDOWN);
 
   Serial.begin(115200);
   Serial.println("");
@@ -70,15 +78,7 @@ void setup() {
     delay(500);
   }
 
-  for (int i=1; i<=5; i++) {
-    findWorkingServer(i);
-    if (serverUrl != "") break;
-    delay(2000);
-  }
-  if (serverUrl == "") {
-    Serial.println("Stopping");
-    while (true) {}
-  }
+  findWorkingServer();
 
   nfc.begin();
   nfc.SAMConfig();
@@ -106,6 +106,11 @@ void loop() {
 
     delay(100);
   }
+
+  if (digitalRead(RESET_PIN) == HIGH) {
+    ESP.restart();
+  }
+
   recvData();
 }
 
@@ -117,6 +122,10 @@ void recvData() {
         Serial.print("{\"id\":\"eTrack Detector ");
         Serial.print(ESP32_ID);
         Serial.print("\"}");
+        break;
+      case 'x':
+        Serial.println("Restarting...");
+        ESP.restart();
         break;
     }
   }
