@@ -79,7 +79,6 @@ void activateTurnouts() {
 
 void recvData() {
   if (Serial.available() > 0) {
-    // char controlChar1 = Serial.read();
     String cmd = Serial.readStringUntil('\n');
     switch (cmd[0]) {
       case '?':

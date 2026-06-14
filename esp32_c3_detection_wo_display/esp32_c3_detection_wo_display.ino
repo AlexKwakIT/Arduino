@@ -4,9 +4,33 @@
 #include <PN532_I2C.h>
 #include <PN532.h>
 
-#define RESET_PIN 4
-#define SDA_PIN 5
-#define SCL_PIN 6
+#define BOARD_XIAO_C3
+// #define BOARD_DEV_C3
+// #define BOARD_TENSTAR_C3
+
+#ifdef BOARD_XIAO_C3
+  #define SDA_PIN 7
+  #define SCL_PIN 21
+  #define PIN_LED_RED 5
+  #define PIN_LED_GREEN 6
+  #define PIN_LED_BLUE 4
+#endif
+
+#ifdef BOARD_DEV_C3
+  #define SDA_PIN 8
+  #define SCL_PIN 9
+  #define PIN_LED_RED 4
+  #define PIN_LED_GREEN 5
+  #define PIN_LED_BLUE 3
+#endif
+
+#ifdef BOARD_TENSTAR_C3
+  #define SDA_PIN 4
+  #define SCL_PIN 3
+  #define PIN_LED_RED 5
+  #define PIN_LED_GREEN 7
+  #define PIN_LED_BLUE 6
+#endif
 
 const char* ssid = "eTrackServer";
 const char* password = "eTrack12321";
@@ -26,7 +50,6 @@ char ESP32_ID[20];
 bool isServerAlive(String url) {
   HTTPClient http;
   String testUrl = url + "/ping/";
-  Serial.println("testUrl: " + testUrl);
   http.begin(testUrl);
   int code = http.GET();
   http.end();
@@ -34,14 +57,14 @@ bool isServerAlive(String url) {
 }
 
 void findWorkingServer() {
-  int i = 1;
+  Serial.print("Finding server..");
   while (true) {
-    Serial.print("Finding server, try ");
-    Serial.println(i);
     for (int i = 0; i < serverCount; i++) {
+      Serial.print(".");
       String url = String(possibleServerPorts[i]);
       if (isServerAlive(url)) {
         serverUrl = url;
+        Serial.println();
         Serial.println("Found server: " + serverUrl);
         HTTPClient http;
         String url = String(serverUrl) + "/detection-checkin/" + ESP32_ID + "/";
@@ -51,18 +74,52 @@ void findWorkingServer() {
         return;
       }
     }
+    delay(250);
   }
 }
+
+void setLedRed() {
+  digitalWrite(PIN_LED_RED, HIGH);
+  digitalWrite(PIN_LED_GREEN, LOW);
+  digitalWrite(PIN_LED_BLUE, LOW);
+}
+
+void setLedGreen() {
+  digitalWrite(PIN_LED_RED, LOW);
+  digitalWrite(PIN_LED_GREEN, HIGH);
+  digitalWrite(PIN_LED_BLUE, LOW);
+}
+
+void setLedBlue() {
+  digitalWrite(PIN_LED_RED, LOW);
+  digitalWrite(PIN_LED_GREEN, LOW);
+  digitalWrite(PIN_LED_BLUE, HIGH);
+}
+
+void setLedOff() {
+  digitalWrite(PIN_LED_RED, LOW);
+  digitalWrite(PIN_LED_GREEN, LOW);
+  digitalWrite(PIN_LED_BLUE, LOW);
+}
+
 void setup() {
   uint64_t chipid = ESP.getEfuseMac();
   sprintf(ESP32_ID, "%04X%08X", (uint16_t)(chipid >> 32), (uint32_t)chipid);
 
-  pinMode(RESET_PIN, INPUT_PULLDOWN);
-
   Serial.begin(115200);
+
+  pinMode(PIN_LED_RED, OUTPUT);
+  pinMode(PIN_LED_GREEN, OUTPUT);
+  pinMode(PIN_LED_BLUE, OUTPUT);
+  setLedRed();
+
   Serial.println("");
   Serial.print("ESP32 C3: ");
   Serial.println(ESP32_ID);
+  Serial.print("SDA: ");
+  Serial.println(SDA_PIN);
+  Serial.print("SCL: ");
+  Serial.println(SCL_PIN);
   Serial.println("Starting up...");
 
   Wire.begin(SDA_PIN, SCL_PIN);
@@ -83,6 +140,8 @@ void setup() {
   nfc.begin();
   nfc.SAMConfig();
   Serial.println("Ready!");
+
+  setLedGreen();
 }
 
 void loop() {
@@ -91,6 +150,8 @@ void loop() {
   uint8_t uidLength;
 
   if (nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A, uid, &uidLength, 100)) {
+    setLedBlue();
+
     String uidString = "";
 
     for (int i = 0; i < uidLength; i++) {
@@ -105,10 +166,7 @@ void loop() {
     sendUID(uidString);
 
     delay(100);
-  }
-
-  if (digitalRead(RESET_PIN) == HIGH) {
-    ESP.restart();
+    setLedGreen();
   }
 
   recvData();
@@ -119,9 +177,12 @@ void recvData() {
     char controlChar1 = Serial.read();
     switch (controlChar1) {
       case '?':
+        setLedBlue();
         Serial.print("{\"id\":\"eTrack Detector ");
         Serial.print(ESP32_ID);
         Serial.print("\"}");
+        delay(250);
+        setLedGreen();
         break;
       case 'x':
         Serial.println("Restarting...");
@@ -136,7 +197,7 @@ void sendUID(String uid) {
   Serial.print("Sending UID ");
   Serial.print(uid);
   Serial.print(" from ");
-  Serial.println(ESP32_ID);
+  Serial.print(ESP32_ID);
   Serial.print(" to ");
   Serial.println(serverUrl);
 
